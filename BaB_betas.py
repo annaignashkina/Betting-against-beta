@@ -1,9 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[ ]:
-
-
 # load the packages
 # please note that this code is not an exact replication, but with 3 things to keep in mind: 
 # 1. betas ex ante are estimated based on monthly(not daily) data for computational reasons, so it can be easily run in the class
@@ -18,17 +15,12 @@ import statsmodels.formula.api as smf
 import statsmodels.api as sm
 
 
-# In[ ]:
-
 
 # set up a working directory, this is where all the data should be
 os.chdir('/Users/PUT_HERE_THE_PATH')
 # display options for pandas, we don't want to see 1000 rows
 pd.set_option('display.max_columns', 50)
 pd.set_option('display.max_rows', 100)
-
-
-# In[ ]:
 
 
 #load mkt returns (those are already over a risk-free rate)
@@ -39,23 +31,11 @@ mkt['date'] = pd.to_datetime(mkt['date'], format='%m/%d/%Y')
 mkt['date'] = mkt['date'].dt.to_period('M')
 
 
-# In[ ]:
-
-
-mkt.head()
-
-
-# In[ ]:
-
-
 #calculate rolling standard deviation
 # shift below is used to use PREVIOUS 12 month
 mkt['std_est'] = mkt['mkt'].rolling(12).std().shift(1)
 #Without shifting we get the REALIZED 12 month rolling std (though we will not use it)
 mkt['std_real'] = mkt['mkt'].rolling(12).std()
-
-
-# In[ ]:
 
 
 #load rf returns
@@ -67,15 +47,6 @@ rf['dateff'] = pd.to_datetime(rf['dateff'], format='%Y%m%d')
 rf.columns = ['date', 'rf']
 #Converting dates into monthly period
 rf['date'] = rf['date'].dt.to_period('M')
-
-
-# In[ ]:
-
-
-rf.head()
-
-
-# In[ ]:
 
 
 # load the data into dataframe
@@ -95,9 +66,6 @@ df['permno'] = df['permno'].astype(str)
 df['year'] = df['date'].dt.year
 
 
-# In[ ]:
-
-
 df['date'] = df['date'].dt.to_period('M')
 # In CRSP if a stock didn't trade at a particular date, there is no record about returns at that date at all.
 # There is a requirement that each stock must have at least 12/36 month data point during previous 12/60 month
@@ -111,9 +79,6 @@ print(df)
 df.columns = ['date', 'id', 'ret']
 
 
-# In[ ]:
-
-
 # To calculate betas we need to merge the main dataset with two other datasets: rf rate and mkt returns
 # mkt
 df = pd.merge(df, mkt, on='date', how='left')
@@ -124,23 +89,14 @@ df = pd.merge(df, rf, on='date', how='left')
 df['ret'] = df['ret'] - df['rf']
 
 
-# In[ ]:
-
-
 # define function to estimate rolling 5 year(60 month) correlations with minimum 36 non-missing datapoints
 def roll_corr(x):
     return pd.DataFrame(x['ret'].rolling(60, min_periods=36).corr(x['mkt']))
 
 
-# In[ ]:
-
-
 #same for rolling std, but with 1 year horizon
 def roll_var(x):
     return pd.DataFrame(x['ret'].rolling(12, min_periods=12).std())
-
-
-# In[ ]:
 
 
 #Then we need to apply this functions to each stock, for this purpose we use groupby 'id'
@@ -149,9 +105,6 @@ df['corr_est'] = df.groupby('id')[['ret', 'mkt']].apply(roll_corr)
 df['corr_est'] = df.groupby('id')['corr_est'].shift(1)
 df['id_var_est'] = df.groupby('id')[['ret', 'mkt']].apply(roll_var)
 df['id_var_est'] = df.groupby('id')[['id_var_est']].shift(1)
-
-
-# In[ ]:
 
 
 #drop all the rows where in ANY column there is a NAN value
@@ -164,22 +117,10 @@ df['beta_est'] = 0.6*df['beta_est'] + 0.4
 df['q'] = df.groupby('date')['beta_est'].apply(lambda x: pd.qcut(x, 10, labels=range(1, 11)))
 
 
-# In[ ]:
-
-
 # check the average mean excess return and average estimated beta and compare it with the table 3
 print(df.groupby('q')[['beta_est', 'ret']].mean())
 alpha = df.groupby(['date', 'q'])[['ret', 'mkt']].mean().reset_index()
 alpha.columns = ['date', 'q', 'ret', 'mkt']
-
-
-# In[ ]:
-
-
-df.head()
-
-
-# In[ ]:
 
 
 #Create an empty dataframe to store estimated alphas and betas
