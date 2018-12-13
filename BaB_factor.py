@@ -1,9 +1,5 @@
 #!/usr/bin/env python
 # coding: utf-8
-
-# In[ ]:
-
-
 # load the packages
 import pandas as pd
 import os
@@ -14,10 +10,6 @@ from scipy import stats
 import statsmodels.formula.api as smf
 import statsmodels.api as sm
 
-
-# In[ ]:
-
-
 # set up a working directory
 os.chdir('/Users/anna/Documents/Teaching/Betting against beta')
 # display options for pandas, we don't want to see 1000 rows, though sometimes we do
@@ -25,16 +17,10 @@ pd.set_option('display.max_columns', 50)
 pd.set_option('display.max_rows', 100)
 
 
-# In[ ]:
-
-
 # load the returns data into dataframe
 df = pd.read_csv('CRSP_monthly_1926_2014.csv')
 # show first 5 lines of it
 df.head()
-
-
-# In[ ]:
 
 
 # load monthly market returns
@@ -45,17 +31,11 @@ mkt['date'] = pd.to_datetime(mkt['date'], format='%m/%d/%Y')
 mkt['date'] = mkt['date'].dt.to_period('M')
 
 
-# In[ ]:
-
-
 #calculate rolling standard deviation
 # shift below is used to use PREVIOUS 12 month
 mkt['std_est'] = mkt['mkt'].rolling(12).std().shift(1)
 #Without shifting we get the REALIZED 12 month rolling std (though we will not use it)
 mkt['std_real'] = mkt['mkt'].rolling(12).std()
-
-
-# In[ ]:
 
 
 #load rf monthly returns
@@ -67,9 +47,6 @@ rf['dateff'] = pd.to_datetime(rf['dateff'], format='%Y%m%d')
 rf.columns = ['date', 'rf']
 #Converting dates into monthly periods
 rf['date'] = rf['date'].dt.to_period('M')
-
-
-# In[ ]:
 
 
 # load the returns data into dataframe
@@ -87,9 +64,6 @@ df['permno'] = df['permno'].astype(str)
 df['year'] = df['date'].dt.year
 
 
-# In[ ]:
-
-
 df['date'] = df['date'].dt.to_period('M')
 # In CRSP if a stock didn't trade at a particular date, there is no record about returns at that date at all.
 # There is a requirement that each stock must have at least 12/36 month data point during previous 12/60 month
@@ -102,9 +76,6 @@ df = df.stack(dropna=False).reset_index()
 df.columns = ['date', 'id', 'ret']
 
 
-# In[ ]:
-
-
 # To calculate betas we need to merge the main dataset with two other datasets: rf rate and mkt returns
 # mkt
 df = pd.merge(df, mkt, on='date', how='left')
@@ -115,23 +86,14 @@ df = pd.merge(df, rf, on='date', how='left')
 df['ret'] = df['ret'] - df['rf']
 
 
-# In[ ]:
-
-
 # define function to estimate rolling 5 year(60 month) correlations with minimum 36 non-missing datapoints
 def roll_corr(x):
     return pd.DataFrame(x['ret'].rolling(60, min_periods=36).corr(x['mkt']))
 
 
-# In[ ]:
-
-
 #same for rolling std, but with 1 year horizon
 def roll_std(x):
     return pd.DataFrame(x['ret'].rolling(12, min_periods=12).std())
-
-
-# In[ ]:
 
 
 #Then we need to apply this functions to each stock, for this purpose we use groupby 'id'
@@ -142,9 +104,6 @@ df['id_std_est'] = df.groupby('id')[['ret', 'mkt']].apply(roll_std)
 df['id_std_est'] = df.groupby('id')[['id_std_est']].shift(1)
 
 
-# In[ ]:
-
-
 #drop all the rows where in ANY column there is a NAN value
 df = df.dropna(how='any')
 # Estimation betas like on page 8 in eq (14) in the paper
@@ -153,14 +112,8 @@ df['beta_est'] = df['corr_est']*df['id_sdt_est'].div(df['std_est'])
 df['beta_est'] = 0.6*df['beta_est'] + 0.4
 
 
-# In[ ]:
-
-
 # For each month we devide betas into 2 groups: high(1) and low(0), cutoo is a median beta
 df['q'] = df.groupby('date')['beta_est'].apply(lambda x: pd.qcut(x, 2, labels=range(0, 2)))
-
-
-# In[ ]:
 
 
 # for each month we rank betas and calculate the weights like in eq(16) in the paper
@@ -169,10 +122,6 @@ df['rank'] = df.groupby('date')['beta_est'].rank()
 df['rank_avg'] = df.groupby('date')['rank'].transform('mean')
 #abs(z-z_bar)
 df['weight'] = abs(df['rank']-df['rank_avg'])
-print(df)
-
-
-# In[ ]:
 
 
 # calculate constant k
@@ -180,17 +129,9 @@ df['k'] = 2/(df.groupby('date')['weight'].transform('sum')).copy()
 print(df)
 # calculate final weights
 df['weight'] = df['weight']*df['k']
-print(df.head())
-
-
-# In[ ]:
-
 
 # check the weights sum up to 1! Always doublecheck what you doublechecked and then check again
-df.groupby(['date', 'q'])['weight'].sum()
-
-
-# In[ ]:
+print(df.groupby(['date', 'q'])['weight'].sum())
 
 
 # calculating beta_H and beta_L
@@ -199,41 +140,24 @@ df['dot'] = (df['beta_est']*df['weight'])
 df['ret'] = (df['ret']*df['weight'])
 # for each date and group (H, L) calculate the aggregate betas and rets
 bab_beta = df.groupby(['date', 'q'])['dot', 'ret'].sum().reset_index()
-print(bab_beta)
-
-
-# In[ ]:
 
 
 bab_beta['inv'] = 1/bab_beta['dot']
-bab_beta.groupby('q')['inv'].mean()
-
-
-# In[ ]:
+print(bab_beta.groupby('q')['inv'].mean())
 
 
 # weight multiplied by return
 bab_beta['w_r'] = bab_beta['inv']*bab_beta['ret']
 
 
-# In[ ]:
-
-
 # just a trick to actualy get the difference by summation(r_bab=part_L-part_H)
 bab_beta['w_r0'] = bab_beta.apply(lambda x: x['w_r'] if x['q']==0 else -x['w_r'], axis=1)
-bab_beta
 bab = bab_beta.groupby('date')['w_r0'].sum().reset_index()
-
-
-# In[ ]:
 
 
 # After groupby many columns disappear, need to merge with mkt dataset again
 bab = pd.merge(bab, mkt, on='date', how='left')
-bab
 
-
-# In[ ]:
 
 
 # running regression to estimate alphas and betas
@@ -243,9 +167,6 @@ x = bab['mkt'].copy()
 x = sm.add_constant(x)
 results = smf.OLS(bab['w_r0'], x).fit(cov_type='HC1')
 print(results.summary())
-
-
-# In[ ]:
 
 
 
