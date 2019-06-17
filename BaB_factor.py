@@ -17,12 +17,6 @@ pd.set_option('display.max_columns', 50)
 pd.set_option('display.max_rows', 100)
 
 
-# load the returns data into dataframe
-df = pd.read_csv('CRSP_monthly_1926_2014.csv')
-# show first 5 lines of it
-df.head()
-
-
 # load monthly market returns
 mkt = pd.read_excel('mkt_monthly.xlsx')
 # make pandas recognize the dates
